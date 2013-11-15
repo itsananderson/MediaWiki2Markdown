@@ -66,31 +66,15 @@ class MD_Converter {
 		$lines = preg_split( "/\r?\n/", $content );
 
 		foreach ( $lines as $line_string ) {
-			$matches = array();
-			if ( preg_match( '/^===(.+)===$/', $line_string, $matches ) ) {
-				$this->in_header_section = true;
-				$this->current_section = '_header';
-				$this->current_section_name = trim( $matches[1] );
-				$section = trim($matches[1]);
-				$this->new_lines[] = $section;
-				$this->new_lines[] = preg_replace( '/./', '=', $section );
-			} elseif ( preg_match( '/^==(.+)==$/', $line_string, $matches ) ) {
-				$this->in_header_section = false;
-				$section = trim($matches[1]);
-				$this->current_section = strtolower( $section );
-				$this->current_section_name = $section;
-
-				if ( $this->is_changelog_section() ) {
-					$this->changelog_lines[] = $section;
-					$this->changelog_lines[] = preg_replace( '/./', '-', $section );
-				} else {
-					$this->new_lines[] = $section;
-					$this->new_lines[] = preg_replace( '/./', '-', $section );
-				}
-			} else {
-				self::handle_line( $line_string );
-			}
+    		self::handle_line( $line_string );
 		}
+
+        $lines = $this->new_lines;
+        $this->new_lines = array();
+
+        foreach ( $lines as $line_string ) {
+            self::handle_line_second_pass( $line_string );
+        }
 
 		$output = implode( "\n", $this->new_lines );
 		$changelog_text = trim( implode( "\n", $this->changelog_lines ) );
@@ -139,8 +123,17 @@ class MD_Converter {
 				}
 			}
 			$this->new_lines[] = $line_string;
+        } elseif ( preg_match( '/^====(.+)====$/', $line_string, $matches ) ) {
+            $line = '#### ' . trim( $matches[1] );
+            $this->new_lines[] = $line;
+        } elseif ( preg_match( '/^===(.+)===$/', $line_string, $matches ) ) {
+            $line = '### ' . trim( $matches[1] );
+            $this->new_lines[] = $line;
+        } elseif ( preg_match( '/^==(.+)==$/', $line_string, $matches ) ) {
+            $line = '## ' . trim( $matches[1] );
+            $this->new_lines[] = $line;
 		} elseif ( preg_match( '/^=(.+)=$/', $line_string, $matches ) ) {
-			$line = '#### ' . trim( $matches[1] ) . ' ####';
+			$line = '# ' . trim( $matches[1] );
 			if ( $this->is_changelog_section() ) {
 				$this->changelog_lines[] = $line;
 			} else {
@@ -206,6 +199,22 @@ class MD_Converter {
 			$this->new_lines[] = $line_string;
 		}
 	}
+
+    private function handle_line_second_pass( $line_string ) {
+        $matches = array();
+
+        if ( preg_match( '/(.*)\[\[Image\:([^|]+)\|(?:.*\|)?(.*)\]\](.*)/', $line_string, $matches ) ) {
+        $this->new_lines[] = $matches[1] . '![' . $matches[3] . '](' . $matches[2] . ')' . $matches[4];
+        } elseif ( preg_match( '/(.*)\[\[([^|]+)\|(.*)\]\](.*)/', $line_string, $matches ) ) {
+            $this->new_lines[] = $matches[1] . '[' . $matches[3] . '](' . $matches[2] . ')' . $matches[4];
+        } elseif ( preg_match( '/(.*)\[\[([^|]+)\]\](.*)/', $line_string, $matches ) ) {
+            $this->new_lines[] = $matches[1] . '[' . $matches[2] . '](' . $matches[2] . ')' . $matches[3];
+        } elseif ( preg_match( '/(.*)\[(https?\:[^\s]+)\s(.*)\](.*)/', $line_string, $matches) ) {
+            $this->new_lines[] =  $matches[1] . '[' . $matches[3] . '](' . $matches[2] . ')' . $matches[4];
+        } else {
+			$this->new_lines[] = $line_string;
+		}
+    }
 
 	private function is_header_line( $line ) {
 
